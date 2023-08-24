@@ -182,16 +182,16 @@ end
 [`imsharpen`](https://ww2.mathworks.cn/help/images/ref/imsharpen.html?s_tid=doc_ta):使用非锐化掩蔽（unsharp masking）方法对灰度图像或真彩色（RGB）图像进行锐化处理。
 该方法通过对原始图像与其高频成分之间的差异进行增强来实现图像的锐化。可以通过 `Name-Value` 形式进行设置具体参数：
 
-- `'Radius'`：设置非锐化掩蔽过程中使用的滤波器半径。较大的半径将会增加图像的锐化程度。默认值为 0.5。
-- `'Amount'`：设置非锐化掩蔽增强的强度。较大的值将导致更强烈的锐化效果。默认值为 1.0。
-- `'Threshold'`：设置非锐化掩蔽过程中用于抑制低对比度细节的阈值。较大的阈值将减少锐化效果。默认值为 0.01。
+- `Radius`：设置非锐化掩蔽过程中使用的滤波器半径。较大的半径将会增加图像的锐化程度。默认值为 0.5。
+- `Amount`：设置非锐化掩蔽增强的强度。较大的值将导致更强烈的锐化效果。默认值为 1.0。
+- `Threshold`：设置非锐化掩蔽过程中用于抑制低对比度细节的阈值。较大的阈值将减少锐化效果。默认值为 0.01。
 
 ```matlab
-       function sharpen(app, event)   % 锐化
-            value= app.Slider_4.Value/50 ;   % 锐化因子
-            sharpened_image = imsharpen(app.im_tab,'Amount',value); % 锐化
-            updateimage(app,sharpened_image);  % 更新图像
-        end
+function sharpen(app, event)   % 锐化
+    value= app.Slider_4.Value/50 ;   % 锐化因子
+    sharpened_image = imsharpen(app.im_tab,'Amount',value); % 锐化
+    updateimage(app,sharpened_image);  % 更新图像
+end
 ```
 
 ### 参考资料
@@ -201,3 +201,301 @@ end
 3. 《计算摄影学基础》张茂军等 白平衡部分
 4. [App 构建组件 - MATLAB & Simulink - MathWorks 中国](https://ww2.mathworks.cn/help/matlab/creating_guis/choose-components-for-your-app-designer-app.html)
 5. [如何实现网页运行matlab程序？ - 知乎 (zhihu.com)](https://www.zhihu.com/question/266000152)
+
+## APP设计
+
+项目的任务是做一个拍照质量提高的项目，根据日常生活经验，拍照质量受到很多因素影响，比如拍摄时的环境，拍摄器材，拍摄时参数，后期处理等等，而我们注重的是图片的后期处理。至于图片的后期处理，现在有许多成熟的软件，比如Photoshop，美图秀秀，甚至还有许多网页版实现。但考虑到难度，时间等因素，我们参考了简单的手机图片编辑软件，对照着实现了部分功能。
+
+### 框架设计
+
+总体来说，APP主要实现以下几个部分。其中最关键的部分是处理图像部分,可以将其转化为各种基本处理函数的组合调用。
+
+![Alt text](<Pasted image 20230623093941.png>)
+
+界面设计，初步计划如下：
+
+![Alt text](<Pasted image 20230623094413.png>)
+
+本次开发APP使用的开发环境是MATLAB R2020b,这个版本APP Designer有了许多有用的更新，比如uitable也加入了列宽定义为可变宽度，按钮和面板组加入了Enable选项等实用的功能。
+
+### 开发方法
+
+APP Designer使用[面向对象语言编程](https://ww2.mathworks.cn/products/matlab/object-oriented-programming.html)，页面分为设计视图和代码视图界面，实现了前端和后端的分离，可以分别进行设计，最后组合在一起。
+下图是设计视图，左侧是一些组件，这些组件本身有一些属性可以在右侧查看，如位置，字体颜色，交互性等。而每个组件的回调函数，可以让用户的行为触发相应的函数，响应用户操作。
+
+![Alt text](<Pasted image 20230623101156.png>)
+
+App程序采用面向对象设计模式，声明对象、定义函数、设置属性和共享数据都封装在一个类中，一个MLAPP文件就是一个类的定义。
+
+**① 类的基本结构**
+properties段：属性的定义，主要包含属性声明代码。
+methods段：方法的定义，由若干函数组成。回调函数只有一个参数app，为界面句柄，存储了界面中各个成员的数据。
+
+```matlab
+classdef 类名 < matlab.apps.AppBase 
+    properties (Access = public) 
+    … 
+    end 
+    methods (Access = private) 
+        function 函数1(app) 
+        … 
+        end 
+        function 函数2(app) 
+        … 
+        end 
+    end 
+end 
+```
+
+存取数据和调用函数称为访问对象成员。
+
+**② 访问权限**
+public：可用于与App的其他类共享数据。
+private：只允许在本类中访问。
+以下属性和函数的默认访问权限为private。
+
+- 属性的声明
+- 界面的启动函数startupFcn
+- 建立界面组件的函数createComponents
+- 回调函数
+
+下面是空白APP的代码，可以清晰的看清代码的结构。
+
+```matlab
+classdef app1 < matlab.apps.AppBase
+
+    % Properties that correspond to app components
+    properties (Access = public)
+        UIFigure  matlab.ui.Figure
+    end
+
+    % Component initialization
+    methods (Access = private)
+
+        % Create UIFigure and components
+        function createComponents(app)
+
+            % Create UIFigure and hide until all components are created
+            app.UIFigure = uifigure('Visible', 'off');
+            app.UIFigure.Position = [100 100 640 480];
+            app.UIFigure.Name = 'MATLAB App';
+
+            % Show the figure after all components are created
+            app.UIFigure.Visible = 'on';
+        end
+    end
+
+    % App creation and deletion
+    methods (Access = public)
+
+        % Construct app
+        function app = app1
+
+            % Create UIFigure and components
+            createComponents(app)
+
+            % Register the app with App Designer
+            registerApp(app, app.UIFigure)
+
+            if nargout == 0
+                clear app
+            end
+        end
+
+        % Code that executes before app deletion
+        function delete(app)
+
+            % Delete UIFigure when app is deleted
+            delete(app.UIFigure)
+        end
+    end
+end
+```
+
+本次项目代码的整体结构如下
+
+![Alt text](<Pasted image 20230623153656.png>)
+
+### 前端设计
+
+首先可以使用网格布局，配置加权大小。并开启图窗的位置中的`Resize`属性，使其能根据窗口大小自动调整布局。
+
+![Alt text](<Pasted image 20230623120828.png>)
+
+接下来拖动相应的组件，并编辑。
+
+![Alt text](<Pasted image 20230623121203.png>)
+
+设置好相应的回调函数之后，打开APP，最终效果如下
+
+![Alt text](<Pasted image 20230623115257.png>)
+
+### 后端设计
+
+#### 图像输入和输出
+
+首先要进行图像输入和输出功能的设计，并为图像处理部分提供相应的接口。
+图像输入分为软件预设图像和用户上传图像两部分
+**预设图像选择部分**
+
+```matlab
+function DropDownValueChanged(app, event)
+ 
+ % Update the image and histograms
+ updateimage(app, app.DropDown.Value);
+ app.im_init = app.im;
+ reset(app,0);
+end
+```
+
+这部分主要完成对下拉列表值得获取，初始并不处理图像，所以将值直接传递给图像输出函数。
+
+**用户上传图像部分**
+
+```matlab
+function LoadButtonPushed(app, event)
+ 
+ % Display uigetfile dialog
+ filterspec = {'*.jpg;*.tif;*.png;*.gif','All Image Files'};
+ [f, p] = uigetfile(filterspec);
+ 
+ % Make sure user didn't cancel uigetfile dialog
+ if (ischar(p))
+  fname = [p f];
+  updateimage(app, fname);
+  app.im_init = app.im;
+  reset(app,0)
+ end
+end
+```
+
+这部分主要用到了`uigetfile`这个内置函数，该函数可以打开文件选择对话框，让用户选择相应文件，并返回文件的名称和路径，同样上传后不做处理直接输出。
+
+**图像输出部分**
+这部分比较简单，直接调用内置的`imsava`函数即可。
+
+```matlab
+function export(app, event)
+ imsave(app.ImageAxes);
+end
+```
+
+#### 图像处理部分
+
+这部分是项目的关键，具体的图像处理算法，这里不详细介绍，主要介绍关于APP的设计问题。输入和输出的功能已经实现，图像处理作为一个整体，又可分解为一次次基本图像处理的组合。如下图所示，每次处理之后为了直观展现处理效果，方便调节，所以也要进行显示。而还原是和对比又为每次处理提供了更多的选择性。
+
+![Alt text](<Pasted image 20230623112107.png>)
+
+图像处理部分由于分解为按步处理，所以要定义属性，方便不同处理函数之间共享数据。且对比和还原功能也需要相应的属性。
+
+```
+properties (Access = public)
+ im     % 当前显示的图像数据
+ im_hsv  % 打开调节1选项卡时保存的HSV空间数据
+ im_class  % 图像类别数据
+ im_tab    % 选项卡图像数据
+ im_init     % 初始图像数据
+end
+```
+
+如果对当前图像进行某个处理，便可以将`im`的属性传递给该处理函数，处理之后，调用图像显示函数，更新`im`并显示图像。
+将`im_init`传入图像更新函数，便可将`im`恢复到`im_init`，实现**图像复原**。
+由于图像更新后`im`属性也会改变，**图像对比**要定义一个局部变量暂存现在的图像。
+
+```matlab
+function compare(app, event)
+ if app.Button_8.Value == 1
+  im_0 = app.im;
+  updateimage(app,app.im_init);
+  app.im = im_0;
+ else
+  updateimage(app,app.im);
+ end
+end
+```
+
+不同于图像处理部分需要根据处理方式设计不同的函数，图像显示可以设计为可复用函数的形式，将某图像和其直方图显示出来。
+由于为输入图像传入或者为处理后图像传入，为了实现函数的复用，所以进行判断选择，而且加入错误提示。
+**图像更新函数**`updateimage(app,imagefile)`分解如下：
+
+```matlab
+try
+ if (ischar(imagefile))
+  app.im = imread(imagefile);
+ else
+  app.im = imagefile;
+ end
+ 
+catch ME
+ % If problem reading image, display error message
+ uialert(app.UIFigure, ME.message, 'Image Error');
+ return;
+end
+```
+
+之后是图像的显示输出。这里根据图像类型为灰度还是真彩色，分别进行不同的显示。
+
+```matlab
+app.im_class = size(app.im,3);
+if isempty(app.im_tab)
+    app.im_tab = app.im;
+    app.im_init = app.im;
+end
+% Create histograms based on number of color channels
+switch app.im_class
+    case 1
+        % Display the grayscale image
+        imagesc(app.ImageAxes,app.im);
+        
+        % Plot all histograms with the same data for grayscale
+        histr = histogram(app.RedAxes, app.im, 'FaceColor',[1 0 0],'EdgeColor', 'none');
+        histg = histogram(app.GreenAxes, app.im, 'FaceColor',[0 1 0],'EdgeColor', 'none');
+        histb = histogram(app.BlueAxes, app.im, 'FaceColor',[0 0 1],'EdgeColor', 'none');
+        
+        
+    case 3
+        
+        % Display the truecolor image
+        imagesc(app.ImageAxes,app.im);
+        
+        % Plot the histograms
+        histr = histogram(app.RedAxes, im2uint8(app.im(:,:,1)), 'FaceColor', [1 0 0], 'EdgeColor', 'none');
+        histg = histogram(app.GreenAxes, im2uint8(app.im(:,:,2)), 'FaceColor', [0 1 0], 'EdgeColor', 'none');
+        histb = histogram(app.BlueAxes, im2uint8(app.im(:,:,3)), 'FaceColor', [0 0 1], 'EdgeColor', 'none');
+        
+    otherwise
+        % Error when image is not grayscale or truecolor
+        uialert(app.UIFigure, 'Image must be grayscale or truecolor.', 'Image Error');
+        return;
+end
+% Get largest bin count
+maxr = max(histr.BinCounts);
+maxg = max(histg.BinCounts);
+maxb = max(histb.BinCounts);
+maxcount = max([maxr maxg maxb]);
+
+% Set y axes limits based on largest bin count
+app.RedAxes.YLim = [0 maxcount];
+app.RedAxes.YTick = round([0 maxcount/2 maxcount], 2, 'significant');
+app.GreenAxes.YLim = [0 maxcount];
+app.GreenAxes.YTick = round([0 maxcount/2 maxcount], 2, 'significant');
+app.BlueAxes.YLim = [0 maxcount];
+app.BlueAxes.YTick = round([0 maxcount/2 maxcount], 2, 'significant');
+```
+
+### 发布和共享
+
+根据官方[共享 App 的方式](https://ww2.mathworks.cn/help/matlab/creating_guis/app-sharing.html)所列举的几种方式，其中直接共享m文件和打包成APP最为方便，但却要求用户安装有MATLAB，虽然可以使用MATLAB Online版本，但一般没有正版工具箱使用权限。而创建独立的桌面应用程序虽然不需要MATLAB本体，但仍需用户要下载用户必须在其系统上安装 MATLAB Runtime运行程序。所以我们选择了使用创建预部署 Web App，此方法允许创建网络内的用户可以在其 Web 浏览器上运行的 App。
+从2018a开始Matlab提供了Web Apps功能，它能够将电脑设为服务器，把App程序发布到局域网，可以通过浏览器访问。使用步骤为
+
+- 使用App Designer创建交互式的应用程序；
+- 使用Web App Compiler打包；
+- 基于MATLAB Web App Server托管。
+具体步骤不再赘述，搭建好后，可以在主页中看到发布的APP，而且同一局域网内可以在浏览器输入`server ip address:port`进行访问。但由于限制和自身水平有限，现在只能体验部分功能。
+![Alt text](<Pasted image 20230623154041.png>)
+
+![Alt text](<Pasted image 20230623154326.png>)
+
+## 总结
+
+本次APP的设计，依赖MATLAB的APP Designer，很方便的制作出来。体验到了APP开发的基本流程，虽然最后开发的APP仍然有很多缺点，比如性能不够好，调节参数设置还不够合理，Web端功能部分失效，但鉴于开发时间较短，仅仅几天的时间做出来的需要完善的地方仍然有很多。
